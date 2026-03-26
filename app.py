@@ -1106,8 +1106,9 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     story.append(Spacer(1, 0.2*cm))
 
     def bar_str(t, width=20):
-        filled = max(0, min(width, int(((t-20)/100)*width)))
-        hex_c = "#D9534F" if t>=80 else "#F0AD4E" if t>=65 else "#4A90D9" if t<=40 else "#4CAF50"
+t = t or 0
+filled = max(0, min(width, int(((t - 20) / 100) * width)))
+hex_c = "#D9534F" if t>=80 else "#F0AD4E" if t>=65 else "#4A90D9" if t<=40 else "#4CAF50"
         return f'<font color="{hex_c}">{"█"*filled}</font><font color="#CCCCCC">{"░"*(width-filled)}</font>'
 
     val_rows = [[Paragraph("<b>Scale</b>",small_s), Paragraph("<b>Raw</b>",small_s),
@@ -1536,8 +1537,9 @@ else:
 
         # Progress
         answered = len(st.session_state.responses)
-        pct = int((answered / 567) * 100)
-        st.markdown(f"""<div style="text-align:center;font-size:0.78rem;color:#8B7355;
+answered = answered or 0
+pct = int((answered / 567) * 100)
+st.markdown(f"""<div style="text-align:center;font-size:0.78rem;color:#8B7355;
                         letter-spacing:0.06em;margin-top:1rem;">
             {answered} of 567 answered  ·  Page {cp+1} of {total_pages}
         </div>
