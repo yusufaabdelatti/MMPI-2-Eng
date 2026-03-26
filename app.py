@@ -1535,36 +1535,40 @@ else:
             else:
                 st.session_state.responses[item_num] = (choice == "True")
 
-        # Progress
-        answered = len(st.session_state.responses)
-    answered = answered or 0
-    pct = int((answered / 567) * 100)
+     # Progress
+answered = len(st.session_state.responses)
+answered = answered or 0
+pct = int((answered / 567) * 100)
+
 st.markdown(f"""<div style="text-align:center;font-size:0.78rem;color:#8B7355;
-                        letter-spacing:0.06em;margin-top:1rem;">
-            {answered} of 567 answered  ·  Page {cp+1} of {total_pages}
-        </div>
-        <div class="progress-wrap">
-            <div class="progress-fill" style="width:{pct}%"></div>
-        </div>""", unsafe_allow_html=True)
+                    letter-spacing:0.06em;margin-top:1rem;">
+        {answered} of 567 answered  ·  Page {cp+1} of {total_pages}
+    </div>
+    <div class="progress-wrap">
+        <div class="progress-fill" style="width:{pct}%"></div>
+    </div>""", unsafe_allow_html=True)
 
-        # Navigation
+# Navigation
 col_prev, col_mid, col_next = st.columns([1, 2, 1])
+
 with col_prev:
-            if cp > 0:
-                if st.button("← Previous"):
-                    st.session_state.current_page -= 1; st.rerun()
-        with col_next:
-            if cp < total_pages - 1:
-                if st.button("Next →"):
-                    st.session_state.current_page += 1; st.rerun()
+    if cp > 0:
+        if st.button("← Previous"):
+            st.session_state.current_page -= 1
+            st.rerun()
 
-        # Final submit on last page
-        if cp == total_pages - 1:
-            all_answered_total = len(st.session_state.responses) == 567
-            client_name = st.session_state.get("client_name_input","") or ""
-            has_arabic  = any('\u0600' <= c <= '\u06ff' for c in client_name)
-            gender_val  = st.session_state.get("gender_input","— Select —")
+with col_next:
+    if cp < total_pages - 1:
+        if st.button("Next →"):
+            st.session_state.current_page += 1
+            st.rerun()
 
+# Final submit on last page
+if cp == total_pages - 1:
+    all_answered_total = len(st.session_state.responses) == 567
+    client_name = st.session_state.get("client_name_input","") or ""
+    has_arabic  = any('\u0600' <= c <= '\u06ff' for c in client_name)
+    gender_val  = st.session_state.get("gender_input","— Select —")
             if not all_answered_total:
                 st.markdown(f"""<div style="background:#FFF8F0;border-left:3px solid #E07B39;
                     padding:1rem 1.2rem;border-radius:0 4px 4px 0;font-size:0.88rem;
