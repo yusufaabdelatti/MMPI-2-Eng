@@ -1105,7 +1105,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
     story.append(Spacer(1, 0.2*cm))
 
-    def bar_str(t, width=20):
+def bar_str(t, width=20):
     t = t or 0
     filled = max(0, min(width, int(((t - 20) / 100) * width)))
     hex_c = "#D9534F" if t>=80 else "#F0AD4E" if t>=65 else "#4A90D9" if t<=40 else "#4CAF50"
