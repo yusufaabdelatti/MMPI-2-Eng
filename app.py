@@ -636,14 +636,19 @@ def score_scale(responses: dict, scale_key: dict) -> int:
                 total += 1
     return total
 
-def raw_to_t(raw: int, scale_name: str, gender: str) -> int:
+def raw_to_t(raw, scale_name: str, gender: str) -> int:
     """Convert raw score to approximate T-score using linear conversion."""
+    if raw is None:
+        return 50
     if scale_name not in NORMATIVE_DATA:
         return 50
-    m, sd, f_m, f_sd = NORMATIVE_DATA[scale_name]
+    norm = NORMATIVE_DATA[scale_name]
+    if len(norm) < 4:
+        return 50
+    m, sd, f_m, f_sd = norm
     mean = m if gender == "Male" else f_m
     sd_v = sd if gender == "Male" else f_sd
-    if sd_v == 0:
+    if not sd_v:
         return 50
     t = 50 + 10 * (raw - mean) / sd_v
     return max(20, min(120, round(t)))
@@ -1030,6 +1035,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     ORANGE = colors.HexColor("#E65100")
 
     def t_color(t):
+        if t is None: return DARK
         if t >= 80: return RED
         elif t >= 65: return ORANGE
         elif t <= 40: return BLUE
@@ -1106,6 +1112,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     story.append(Spacer(1, 0.2*cm))
 
     def bar_str(t, width=20):
+        if t is None: t = 50
         filled = max(0, min(width, int(((t-20)/100)*width)))
         hex_c = "#D9534F" if t>=80 else "#F0AD4E" if t>=65 else "#4A90D9" if t<=40 else "#4CAF50"
         return f'<font color="{hex_c}">{"█"*filled}</font><font color="#CCCCCC">{"░"*(width-filled)}</font>'
@@ -1117,7 +1124,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
         ("F","F_raw","F_T"),("Fb","Fb_raw","Fb_T"),("Fp","Fp_raw","Fp_T"),
         ("L","L_raw","L_T"),("K","K_raw","K_T"),("S","S_raw","S_T"),
     ]:
-        t = scores[tk]; raw = scores[rk]
+        t = scores.get(tk) or 50; raw = scores.get(rk) or 0
         val_rows.append([
             Paragraph(name, small_s),
             Paragraph(str(raw), ParagraphStyle("v",fontName="Helvetica",fontSize=8,alignment=TA_CENTER)),
@@ -1153,7 +1160,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     clin_rows = [[Paragraph("<b>Scale</b>",small_s), Paragraph("<b>Raw</b>",small_s),
                   Paragraph("<b>T</b>",small_s), Paragraph("<b>Profile (20–120)</b>",small_s)]]
     for label, tk, rk in clin_data:
-        t = scores[tk]; raw = scores[rk]
+        t = scores.get(tk) or 50; raw = scores.get(rk) or 0
         clin_rows.append([
             Paragraph(label, small_s),
             Paragraph(str(raw), ParagraphStyle("c",fontName="Helvetica",fontSize=8,alignment=TA_CENTER)),
@@ -1168,7 +1175,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
         ("LEFTPADDING",(0,0),(-1,-1),6),("ALIGN",(1,0),(2,-1),"CENTER"),
     ]))
     for i, (_, tk, _) in enumerate(clin_data, 1):
-        if scores[tk] >= 65:
+        if (scores.get(tk) or 0) >= 65:
             ct_table.setStyle(TableStyle([("BACKGROUND",(0,i),(-1,i),colors.HexColor("#FFF3F3"))]))
     story += [ct_table, Spacer(1, 0.3*cm)]
     story.append(Paragraph(
@@ -1193,7 +1200,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     cont_rows = [[Paragraph("<b>Scale</b>",small_s), Paragraph("<b>Raw</b>",small_s),
                   Paragraph("<b>T</b>",small_s), Paragraph("<b>Profile</b>",small_s)]]
     for s in cont_scales:
-        t = scores[f"{s}_T"]; raw = scores[f"{s}_raw"]
+        t = scores.get(f"{s}_T") or 50; raw = scores.get(f"{s}_raw") or 0
         cont_rows.append([
             Paragraph(f"{s} — {cont_labels[s]}", small_s),
             Paragraph(str(raw), ParagraphStyle("d",fontName="Helvetica",fontSize=8,alignment=TA_CENTER)),
@@ -1208,7 +1215,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
         ("LEFTPADDING",(0,0),(-1,-1),6),("ALIGN",(1,0),(2,-1),"CENTER"),
     ]))
     for i, s in enumerate(cont_scales, 1):
-        if scores[f"{s}_T"] >= 65:
+        if (scores.get(f"{s}_T") or 0) >= 65:
             cont_t.setStyle(TableStyle([("BACKGROUND",(0,i),(-1,i),colors.HexColor("#FFF3F3"))]))
     story += [cont_t, Spacer(1, 0.4*cm)]
 
@@ -1228,7 +1235,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
 
     supp_rows = [[Paragraph("<b>Scale</b>",small_s),Paragraph("<b>Raw</b>",small_s),Paragraph("<b>T</b>",small_s)]]
     for s, lbl in supp_list:
-        t = scores[f"{s}_T"]; raw = scores[f"{s}_raw"]
+        t = scores.get(f"{s}_T") or 50; raw = scores.get(f"{s}_raw") or 0
         supp_rows.append([
             Paragraph(f"{s} — {lbl}", small_s),
             Paragraph(str(raw), ParagraphStyle("sr",fontName="Helvetica",fontSize=8,alignment=TA_CENTER)),
@@ -1236,7 +1243,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
         ])
     psy5_rows = [[Paragraph("<b>PSY-5 Scale</b>",small_s),Paragraph("<b>Raw</b>",small_s),Paragraph("<b>T</b>",small_s)]]
     for s, lbl in psy5_list:
-        t = scores[f"{s}_T"]; raw = scores[f"{s}_raw"]
+        t = scores.get(f"{s}_T") or 50; raw = scores.get(f"{s}_raw") or 0
         psy5_rows.append([
             Paragraph(f"{s} — {lbl}", small_s),
             Paragraph(str(raw), ParagraphStyle("pr",fontName="Helvetica",fontSize=8,alignment=TA_CENTER)),
@@ -1285,7 +1292,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     for group, items in hl_groups.items():
         hl_rows.append([Paragraph(f"<b>{group}</b>", ParagraphStyle("gg",fontName="Helvetica-Bold",fontSize=8,textColor=WARM)), "", ""])
         for code, lbl in items:
-            t = scores[f"{code}_T"]; raw = scores[f"{code}_raw"]
+            t = scores.get(f"{code}_T") or 50; raw = scores.get(f"{code}_raw") or 0
             hl_rows.append([
                 Paragraph(f"  {code} — {lbl}", small_s),
                 Paragraph(str(raw), ParagraphStyle("hr",fontName="Helvetica",fontSize=8,alignment=TA_CENTER)),
