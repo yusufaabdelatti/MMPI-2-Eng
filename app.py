@@ -1352,10 +1352,190 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
     doc.build(story)
 
 # ══════════════════════════════════════════════════════════════
+#  ANSWERS PDF  (567 Q&A sheet)
+# ══════════════════════════════════════════════════════════════
+
+def create_answers_pdf(path, client_name, age, gender, responses):
+    """Generate a two-column Q&A PDF listing all 567 items with True/False answers."""
+    DARK   = colors.HexColor("#1C1917")
+    WARM   = colors.HexColor("#6B5B45")
+    LIGHT  = colors.HexColor("#F7F3EE")
+    BORDER = colors.HexColor("#DDD5C8")
+    GREEN  = colors.HexColor("#2E7D32")
+    RED    = colors.HexColor("#C62828")
+    GREY   = colors.HexColor("#9E9E9E")
+
+    doc = SimpleDocTemplate(
+        path, pagesize=A4,
+        leftMargin=1.8*cm, rightMargin=1.8*cm,
+        topMargin=1.8*cm, bottomMargin=1.8*cm
+    )
+
+    title_s  = ParagraphStyle("T", fontName="Times-Roman",   fontSize=16, textColor=DARK,
+                               alignment=TA_CENTER, spaceAfter=3)
+    sub_s    = ParagraphStyle("S", fontName="Times-Italic",   fontSize=9,  textColor=WARM,
+                               alignment=TA_CENTER, spaceAfter=2)
+    meta_s   = ParagraphStyle("M", fontName="Helvetica",      fontSize=7.5,textColor=WARM,
+                               alignment=TA_CENTER, spaceAfter=8)
+    small_s  = ParagraphStyle("Sm",fontName="Helvetica",      fontSize=7.5,textColor=WARM, leading=11)
+    footer_s = ParagraphStyle("F", fontName="Helvetica-Oblique",fontSize=6.5,textColor=WARM,
+                               leading=9, alignment=TA_CENTER)
+
+    story = []
+    date_str = datetime.datetime.now().strftime("%B %d, %Y  |  %H:%M")
+
+    # Header
+    if os.path.exists(LOGO_FILE):
+        try:
+            logo = RLImage(LOGO_FILE, width=3*cm, height=1.5*cm)
+            logo.hAlign = "CENTER"
+            story.append(logo); story.append(Spacer(1, 0.2*cm))
+        except: pass
+
+    story += [
+        Paragraph("Minnesota Multiphasic Personality Inventory-2", title_s),
+        Paragraph("MMPI-2 — Item Response Sheet", sub_s),
+        Paragraph(f"CONFIDENTIAL  ·  {date_str}", meta_s),
+        HRFlowable(width="100%", thickness=1, color=BORDER),
+        Spacer(1, 0.2*cm),
+    ]
+
+    # Client info row
+    info_data = [[
+        Paragraph(f"<b>Client:</b>  {client_name}", small_s),
+        Paragraph(f"<b>Age:</b>  {age}", small_s),
+        Paragraph(f"<b>Gender:</b>  {gender}", small_s),
+        Paragraph(f"<b>Items:</b>  567  ·  True/False", small_s),
+    ]]
+    info_t = Table(info_data, colWidths=[4.5*cm, 2.5*cm, 3*cm, 5.2*cm])
+    info_t.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1),LIGHT),
+        ("BOX",(0,0),(-1,-1),0.5,BORDER),
+        ("INNERGRID",(0,0),(-1,-1),0.3,BORDER),
+        ("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5),
+        ("LEFTPADDING",(0,0),(-1,-1),8),
+    ]))
+    story += [info_t, Spacer(1, 0.3*cm)]
+
+    # Legend
+    legend_s = ParagraphStyle("Lg", fontName="Helvetica", fontSize=7.5, textColor=WARM,
+                               leading=11, alignment=TA_CENTER)
+    story.append(Paragraph(
+        '<font color="#2E7D32"><b>T = True</b></font>   ·   '
+        '<font color="#C62828"><b>F = False</b></font>   ·   '
+        '<font color="#9E9E9E">— = Not answered</font>',
+        legend_s
+    ))
+    story.append(Spacer(1, 0.2*cm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+    story.append(Spacer(1, 0.15*cm))
+
+    # Table header
+    hdr_s = ParagraphStyle("H", fontName="Helvetica-Bold", fontSize=7.5,
+                            textColor=colors.white, leading=11, alignment=TA_CENTER)
+    q_hdr_s = ParagraphStyle("QH",fontName="Helvetica-Bold", fontSize=7.5,
+                              textColor=colors.white, leading=11)
+
+    # Build item rows — two items per row for compactness
+    num_s  = ParagraphStyle("N", fontName="Helvetica-Bold", fontSize=7,
+                             textColor=WARM, leading=10, alignment=TA_CENTER)
+    ans_T  = ParagraphStyle("AT",fontName="Helvetica-Bold", fontSize=8,
+                             textColor=GREEN, leading=11, alignment=TA_CENTER)
+    ans_F  = ParagraphStyle("AF",fontName="Helvetica-Bold", fontSize=8,
+                             textColor=RED,   leading=11, alignment=TA_CENTER)
+    ans_na = ParagraphStyle("AN",fontName="Helvetica",      fontSize=8,
+                             textColor=GREY,  leading=11, alignment=TA_CENTER)
+    q_s    = ParagraphStyle("Q", fontName="Helvetica",      fontSize=7.5,
+                             textColor=DARK,  leading=11)
+
+    # Column widths for two-item layout:
+    # [#1, ans1, question1, #2, ans2, question2]
+    col_w = [0.7*cm, 0.9*cm, 7.2*cm, 0.7*cm, 0.9*cm, 7.2*cm]
+
+    rows = []
+    # Header row
+    rows.append([
+        Paragraph("#", hdr_s), Paragraph("Ans", hdr_s), Paragraph("Statement", q_hdr_s),
+        Paragraph("#", hdr_s), Paragraph("Ans", hdr_s), Paragraph("Statement", q_hdr_s),
+    ])
+
+    def ans_para(item_num):
+        ans = responses.get(item_num)
+        if ans is True:   return Paragraph("T", ans_T)
+        elif ans is False: return Paragraph("F", ans_F)
+        else:              return Paragraph("—", ans_na)
+
+    # Pair up items
+    items_list = list(enumerate(MMPI2_QUESTIONS, start=1))
+    for i in range(0, len(items_list), 2):
+        num1, q1 = items_list[i]
+        if i + 1 < len(items_list):
+            num2, q2 = items_list[i + 1]
+            row = [
+                Paragraph(str(num1), num_s), ans_para(num1), Paragraph(q1, q_s),
+                Paragraph(str(num2), num_s), ans_para(num2), Paragraph(q2, q_s),
+            ]
+        else:
+            row = [
+                Paragraph(str(num1), num_s), ans_para(num1), Paragraph(q1, q_s),
+                Paragraph("", num_s), Paragraph("", num_s), Paragraph("", q_s),
+            ]
+        rows.append(row)
+
+    tbl = Table(rows, colWidths=col_w, repeatRows=1)
+    tbl_styles = [
+        # Header
+        ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#EDE9E3")),
+        ("BOX",(0,0),(-1,-1),0.4,BORDER),
+        ("INNERGRID",(0,0),(-1,-1),0.25,BORDER),
+        ("TOPPADDING",(0,0),(-1,-1),3),
+        ("BOTTOMPADDING",(0,0),(-1,-1),3),
+        ("LEFTPADDING",(0,0),(-1,-1),4),
+        ("ALIGN",(0,0),(0,-1),"CENTER"),
+        ("ALIGN",(1,0),(1,-1),"CENTER"),
+        ("ALIGN",(3,0),(3,-1),"CENTER"),
+        ("ALIGN",(4,0),(4,-1),"CENTER"),
+        ("VALIGN",(0,0),(-1,-1),"TOP"),
+        # Vertical divider between the two halves
+        ("LINEAFTER",(2,0),(2,-1),0.8,colors.HexColor("#C8C0B4")),
+    ]
+    # Zebra shading
+    for r_idx in range(1, len(rows)):
+        if r_idx % 2 == 0:
+            tbl_styles.append(("BACKGROUND",(0,r_idx),(-1,r_idx),LIGHT))
+    # Highlight True answers
+    for r_idx in range(1, len(rows)):
+        pair_idx = r_idx - 1  # 0-based pair
+        num1 = pair_idx * 2 + 1
+        num2 = num1 + 1
+        if responses.get(num1) is True:
+            tbl_styles.append(("BACKGROUND",(0,r_idx),(2,r_idx),colors.HexColor("#F0FFF0")))
+        if num2 <= 567 and responses.get(num2) is True:
+            tbl_styles.append(("BACKGROUND",(3,r_idx),(5,r_idx),colors.HexColor("#F0FFF0")))
+
+    tbl.setStyle(TableStyle(tbl_styles))
+    story.append(tbl)
+
+    # Footer
+    story += [
+        Spacer(1, 0.3*cm),
+        HRFlowable(width="100%", thickness=0.5, color=BORDER),
+        Spacer(1, 0.1*cm),
+        Paragraph(
+            "This document is strictly confidential and intended solely for the treating clinician. "
+            "Item responses are provided for clinical review and should not be shared with the client.",
+            footer_s
+        ),
+    ]
+    doc.build(story)
+
+
+# ══════════════════════════════════════════════════════════════
 #  EMAIL
 # ══════════════════════════════════════════════════════════════
 
-def send_email(pdf_path, client_name, scores, filename):
+def send_email(clinical_pdf_path, answers_pdf_path, client_name, scores,
+               clinical_fname, answers_fname):
     date_str = datetime.datetime.now().strftime("%B %d, %Y at %H:%M")
     elevated = [(s, scores[f"{s}_T"]) for s in
                 ["Hs","D","Hy","Pd","Mf","Pa","Pt","Sc","Ma","Si"]
@@ -1371,7 +1551,6 @@ def send_email(pdf_path, client_name, scores, filename):
     body_html = f"""<html><body style="font-family:Georgia,serif;color:#1C1917;background:#F7F3EE;padding:24px;">
       <div style="max-width:580px;margin:0 auto;background:white;border:1px solid #DDD5C8;border-radius:4px;padding:32px;">
         <h2 style="font-weight:300;font-size:20px;margin-bottom:2px;">MMPI-2 Assessment Report</h2>
-        <p style="color:#B71C1C;font-size:11px;margin-top:0;font-style:italic;">Research/Training Simulation — Not for clinical use</p>
         <hr style="border:none;border-top:1px solid #DDD5C8;margin:16px 0;">
         <table style="width:100%;font-size:13px;border-collapse:collapse;">
           <tr><td style="padding:5px 0;color:#6B5B45;width:40%;">Client</td><td><strong>{client_name}</strong></td></tr>
@@ -1384,15 +1563,18 @@ def send_email(pdf_path, client_name, scores, filename):
         <p style="font-size:12px;color:#6B5B45;font-weight:bold;">Elevated Clinical Scales (T≥65)</p>
         <table style="width:100%;font-size:12px;border-collapse:collapse;">{elev_html}</table>
         <hr style="border:none;border-top:1px solid #DDD5C8;margin:16px 0;">
-        <p style="font-size:12px;line-height:1.6;">Full report attached as PDF.</p>
+        <p style="font-size:12px;line-height:1.6;">Two PDF files attached:<br>
+        📄 <strong>Clinical Report</strong> — Full MMPI-2 extended score report<br>
+        📋 <strong>Item Response Sheet</strong> — All 567 questions with answers</p>
         <p style="font-size:10px;color:#6B5B45;font-style:italic;">Confidential — treating clinician only.</p>
       </div></body></html>"""
     msg.attach(MIMEText(body_html, "html"))
-    with open(pdf_path, "rb") as f:
-        part = MIMEBase("application","octet-stream"); part.set_payload(f.read())
-    encoders.encode_base64(part)
-    part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
-    msg.attach(part)
+    for fpath, fname in [(clinical_pdf_path, clinical_fname), (answers_pdf_path, answers_fname)]:
+        with open(fpath, "rb") as f:
+            part = MIMEBase("application","octet-stream"); part.set_payload(f.read())
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f'attachment; filename="{fname}"')
+        msg.attach(part)
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
         srv.login(GMAIL_ADDRESS, GMAIL_PASSWORD)
         srv.sendmail(GMAIL_ADDRESS, THERAPIST_EMAIL, msg.as_string())
@@ -1648,19 +1830,29 @@ else:
                     )
                     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     sn = (client_name or "anonymous").replace(" ","_").lower()
-                    fname = f"MMPI2_{sn}_{ts}.pdf"
+                    clinical_fname = f"MMPI2_{sn}_{ts}.pdf"
+                    answers_fname  = f"MMPI2_{sn}_{ts}_responses.pdf"
                     os.makedirs("reports", exist_ok=True)
-                    pdf_path = os.path.join("reports", fname)
+                    clinical_path = os.path.join("reports", clinical_fname)
+                    answers_path  = os.path.join("reports", answers_fname)
                     try:
-                        create_pdf(pdf_path, client_name or "Anonymous",
+                        create_pdf(clinical_path, client_name or "Anonymous",
                                    st.session_state.get("age_saved","") or "N/A",
                                    g, scores, validity, report)
                     except Exception as e:
                         st.error(f"PDF error: {e}"); st.stop()
+                    try:
+                        create_answers_pdf(answers_path, client_name or "Anonymous",
+                                           st.session_state.get("age_saved","") or "N/A",
+                                           g, st.session_state.responses)
+                    except Exception as e:
+                        st.error(f"Answers PDF error: {e}"); st.stop()
 
                     email_error = None
                     try:
-                        send_email(pdf_path, client_name or "Anonymous", scores, fname)
+                        send_email(clinical_path, answers_path,
+                                   client_name or "Anonymous", scores,
+                                   clinical_fname, answers_fname)
                     except Exception as e:
                         email_error = str(e)
 
