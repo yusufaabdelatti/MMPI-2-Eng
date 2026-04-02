@@ -1071,14 +1071,6 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
         HRFlowable(width="100%", thickness=1, color=BORDER), Spacer(1, 0.3*cm),
     ]
 
-    # Disclaimer box
-    story.append(Paragraph(
-        "⚠  RESEARCH/TRAINING SIMULATION ONLY — Scoring is approximate based on published academic literature. "
-        "Not validated for clinical use. Do not use for real diagnostic or treatment decisions.",
-        ParagraphStyle("D", fontName="Helvetica-Bold", fontSize=8, textColor=RED,
-                       backColor=colors.HexColor("#FFF3F3"), leading=12,
-                       borderPad=6, spaceAfter=8)
-    ))
 
     # Client info
     info_data = [
