@@ -13,6 +13,8 @@ from reportlab.platypus import (
     TableStyle, HRFlowable, Image as RLImage, PageBreak
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.graphics.shapes import Drawing, Line, Rect, String, Circle
+from reportlab.platypus import BaseDocTemplate, Frame, PageTemplate
 
 from scoring_keys import (
     L_SCALE, F_SCALE, FB_SCALE, FP_SCALE, K_SCALE, S_SCALE,
@@ -1021,6 +1023,86 @@ Do not reproduce the scoring guides verbatim. Label each section exactly as abov
     return response.json()["choices"][0]["message"]["content"].strip()
 
 # ══════════════════════════════════════════════════════════════
+#  PROFILE CHART (Clinical Scales)
+# ══════════════════════════════════════════════════════════════
+
+def build_profile_chart(scores, width_pts=480, height_pts=160):
+    """Build a clinical profile line chart as a ReportLab Drawing."""
+    from reportlab.lib.colors import HexColor, white
+
+    scale_labels = ["Hs","D","Hy","Pd","Mf","Pa","Pt","Sc","Ma","Si"]
+    scale_nums   = ["1","2","3","4","5","6","7","8","9","0"]
+    t_values     = [scores[f"{s}_T"] for s in scale_labels]
+
+    PAD_L, PAD_R, PAD_T, PAD_B = 30, 10, 10, 28
+    chart_w = width_pts - PAD_L - PAD_R
+    chart_h = height_pts - PAD_T - PAD_B
+    T_MIN, T_MAX = 20, 120
+
+    d = Drawing(width_pts, height_pts)
+
+    # Background
+    d.add(Rect(PAD_L, PAD_B, chart_w, chart_h,
+               fillColor=HexColor("#FAFAFA"), strokeColor=HexColor("#CCCCCC"), strokeWidth=0.5))
+
+    # Horizontal grid lines + T labels
+    for t in [30,40,50,60,65,70,80,90,100,110,120]:
+        y = PAD_B + (t - T_MIN) / (T_MAX - T_MIN) * chart_h
+        col = HexColor("#FF9800") if t == 65 else HexColor("#DDDDDD")
+        sw  = 0.8 if t == 65 else 0.4
+        d.add(Line(PAD_L, y, PAD_L + chart_w, y, strokeColor=col, strokeWidth=sw))
+        d.add(String(PAD_L - 4, y - 3, str(t),
+                     fontSize=5, fillColor=HexColor("#888888"), textAnchor="end"))
+
+    n  = len(scale_labels)
+    xs = [PAD_L + (i + 0.5) * chart_w / n for i in range(n)]
+
+    # Vertical dividers
+    for x in xs:
+        d.add(Line(x, PAD_B, x, PAD_B + chart_h,
+                   strokeColor=HexColor("#EEEEEE"), strokeWidth=0.3))
+
+    # Scale labels at bottom
+    for i, (lbl, num) in enumerate(zip(scale_labels, scale_nums)):
+        d.add(String(xs[i], PAD_B - 10, num,
+                     fontSize=6, fillColor=HexColor("#555555"), textAnchor="middle"))
+        d.add(String(xs[i], PAD_B - 18, lbl,
+                     fontSize=5, fillColor=HexColor("#888888"), textAnchor="middle"))
+
+    # Line connecting points
+    ys = [PAD_B + (t - T_MIN) / (T_MAX - T_MIN) * chart_h for t in t_values]
+    for i in range(len(xs)-1):
+        d.add(Line(xs[i], ys[i], xs[i+1], ys[i+1],
+                   strokeColor=HexColor("#1A5CB8"), strokeWidth=1.2))
+
+    # Data points + T value labels
+    for x, y, t in zip(xs, ys, t_values):
+        dot_col = HexColor("#D9534F") if t >= 80 else HexColor("#F0AD4E") if t >= 65 else HexColor("#1A5CB8")
+        d.add(Circle(x, y, 3, fillColor=dot_col, strokeColor=white, strokeWidth=0.5))
+        d.add(String(x, y + 5, str(t), fontSize=5, fillColor=dot_col, textAnchor="middle"))
+
+    return d
+
+
+# ══════════════════════════════════════════════════════════════
+#  PAGE NUMBER CALLBACK
+# ══════════════════════════════════════════════════════════════
+
+def _add_page_number(canvas, doc):
+    """Draw centered page number at bottom of every page."""
+    canvas.saveState()
+    canvas.setFont("Helvetica", 7)
+    canvas.setFillColorRGB(0.42, 0.36, 0.27)   # warm #6B5B45
+    page_w, _ = A4
+    canvas.drawCentredString(
+        page_w / 2,
+        1.1 * cm,
+        f"Page {doc.page}"
+    )
+    canvas.restoreState()
+
+
+# ══════════════════════════════════════════════════════════════
 #  PDF CREATION
 # ══════════════════════════════════════════════════════════════
 
@@ -1043,9 +1125,9 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
 
     doc = SimpleDocTemplate(path, pagesize=A4,
                             leftMargin=2*cm, rightMargin=2*cm,
-                            topMargin=2*cm, bottomMargin=2*cm)
+                            topMargin=2*cm, bottomMargin=2.2*cm)
 
-    title_s  = ParagraphStyle("T", fontName="Times-Roman",      fontSize=18, textColor=DARK, alignment=TA_CENTER, spaceAfter=10)
+    title_s  = ParagraphStyle("T", fontName="Times-Roman",      fontSize=18, textColor=DARK, alignment=TA_CENTER, spaceAfter=15)
     sub_s    = ParagraphStyle("S", fontName="Times-Italic",      fontSize=10, textColor=WARM, alignment=TA_CENTER, spaceAfter=2)
     meta_s   = ParagraphStyle("M", fontName="Helvetica",         fontSize=8,  textColor=WARM, alignment=TA_CENTER, spaceAfter=10)
     sec_s    = ParagraphStyle("Se",fontName="Helvetica-Bold",    fontSize=10, textColor=WARM, spaceBefore=12, spaceAfter=4)
@@ -1071,6 +1153,14 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
         HRFlowable(width="100%", thickness=1, color=BORDER), Spacer(1, 0.3*cm),
     ]
 
+    # Disclaimer box
+    story.append(Paragraph(
+        "⚠  RESEARCH/TRAINING SIMULATION ONLY — Scoring is approximate based on published academic literature. "
+        "Not validated for clinical use. Do not use for real diagnostic or treatment decisions.",
+        ParagraphStyle("D", fontName="Helvetica-Bold", fontSize=8, textColor=RED,
+                       backColor=colors.HexColor("#FFF3F3"), leading=12,
+                       borderPad=6, spaceAfter=8)
+    ))
 
     # Client info
     info_data = [
@@ -1174,7 +1264,19 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
         f"Profile Elevation: {scores['profile_elevation']}  |  High-Point Pair: {scores['high_point_pair']}  |  Welsh Code: {scores['welsh_code']}  |  F-K Index: {scores['FK_index']}",
         ParagraphStyle("pe", fontName="Helvetica", fontSize=8, textColor=WARM, leading=11)
     ))
-    story += [Spacer(1, 0.4*cm), PageBreak()]
+    story.append(Spacer(1, 0.3*cm))
+
+    # ── PROFILE CHART ──────────────────────────────────────────
+    story.append(Paragraph("CLINICAL PROFILE CHART", sec_s))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+    story.append(Spacer(1, 0.2*cm))
+    story.append(build_profile_chart(scores, width_pts=480, height_pts=170))
+    story.append(Paragraph(
+        "<i>Profile chart: T-scores for Clinical Scales 1(Hs) through 0(Si). "
+        "Orange line = T=65 clinical threshold. Red dots = T≥80; Orange = T 65–79; Blue = T≤40.</i>",
+        ParagraphStyle("cn", fontName="Helvetica-Oblique", fontSize=7, textColor=WARM, leading=10, spaceAfter=4)
+    ))
+    story += [Spacer(1, 0.3*cm), PageBreak()]
 
     # Content scales
     story.append(Paragraph("CONTENT SCALES", sec_s))
@@ -1341,7 +1443,7 @@ def create_pdf(path, client_name, age, gender, scores, validity, report_text):
             footer_s
         ),
     ]
-    doc.build(story)
+    doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
 
 # ══════════════════════════════════════════════════════════════
 #  ANSWERS PDF  (567 Q&A sheet)
@@ -1360,7 +1462,7 @@ def create_answers_pdf(path, client_name, age, gender, responses):
     doc = SimpleDocTemplate(
         path, pagesize=A4,
         leftMargin=1.8*cm, rightMargin=1.8*cm,
-        topMargin=1.8*cm, bottomMargin=1.8*cm
+        topMargin=1.8*cm, bottomMargin=2.2*cm
     )
 
     title_s  = ParagraphStyle("T", fontName="Times-Roman",   fontSize=16, textColor=DARK,
@@ -1519,7 +1621,7 @@ def create_answers_pdf(path, client_name, age, gender, responses):
             footer_s
         ),
     ]
-    doc.build(story)
+    doc.build(story, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
 
 
 # ══════════════════════════════════════════════════════════════
